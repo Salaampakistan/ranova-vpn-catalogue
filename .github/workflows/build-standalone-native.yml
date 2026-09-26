@@ -14,6 +14,7 @@ jobs:
   native:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,15 +35,18 @@ jobs:
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
 
       - name: Build arm64 standalone engine
+        shell: bash
         run: |
-          cargo ndk             -t arm64-v8a             -p 24             -o android-standalone-native/out             build             --manifest-path android-standalone-native/Cargo.toml             --release
+          cd android-standalone-native
+          cargo ndk -t arm64-v8a -p 24 -o out build --release
 
       - name: Verify native output
         shell: bash
         run: |
           find android-standalone-native/out -type f -maxdepth 3 -print
           test -f android-standalone-native/out/arm64-v8a/libranova_vpn_native.so
-          sha256sum android-standalone-native/out/arm64-v8a/libranova_vpn_native.so             | tee android-standalone-native/NATIVE-SHA256.txt
+          sha256sum android-standalone-native/out/arm64-v8a/libranova_vpn_native.so \
+            | tee android-standalone-native/NATIVE-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
