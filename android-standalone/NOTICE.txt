@@ -1,0 +1,10 @@
+RANOVA Standalone VPN Engine Test
+
+This engineering test embeds the io.github.tim06 OpenVPN Android library and
+does not require a separately installed VPN application.
+
+The library artifact declares Apache-2.0 in Maven Central. Its OpenVPN lineage
+also includes open-source components with their own license obligations.
+RANOVA source for this test is kept in this public repository.
+
+This test is not the final production RANOVA VPN PRO release.
