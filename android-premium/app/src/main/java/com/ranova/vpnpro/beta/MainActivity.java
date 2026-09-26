@@ -48,9 +48,21 @@ public class MainActivity extends Activity {
 
     private EmbeddedVpnController vpnController;
     private boolean connected=false;
+    private boolean connectionAttempt=false;
     private String pending;
     private long baseRx=-1,baseTx=-1;
     private final Handler h=new Handler(Looper.getMainLooper());
+
+    private final Runnable connectTimeout=()->{
+        if(connectionAttempt&&!connected){
+            connectionAttempt=false;
+            if(vpnController!=null) vpnController.stop();
+            connectText.setText("CONNECT");
+            connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
+            status.setText("Server did not connect. Choose another location.");
+            status.setTextColor(Ui.MUTED);
+        }
+    };
 
     private final Runnable traffic=new Runnable(){
         @Override public void run(){
@@ -173,7 +185,7 @@ public class MainActivity extends Activity {
         connectCircle.addView(connectText);
 
         connectCircle.setOnClickListener(v->{
-            if(connected) disconnect();
+            if(connected||connectionAttempt) disconnect();
             else connect();
         });
 
@@ -869,22 +881,20 @@ public class MainActivity extends Activity {
         for(String line:raw.replace("\r\n","\n").replace("\r","\n").split("\n")){
             String t=line.trim().toLowerCase(Locale.US);
 
-            if(t.startsWith("cipher ")
-                    ||t.startsWith("data-ciphers ")
-                    ||t.startsWith("data-ciphers-fallback ")
-                    ||t.startsWith("keysize ")
-                    ||t.startsWith("connect-retry ")
-                    ||t.startsWith("connect-retry-max ")){
+            // Keep the server's original cipher/auth profile. Only make retries finite
+            // so a dead relay never leaves RANOVA spinning forever.
+            if(t.startsWith("connect-retry ")
+                    ||t.startsWith("connect-retry-max ")
+                    ||t.startsWith("resolv-retry ")){
                 continue;
             }
 
             out.append(line).append("\n");
         }
 
-        out.append("cipher CHACHA20-POLY1305\n");
-        out.append("data-ciphers CHACHA20-POLY1305:AES-256-GCM:AES-128-GCM\n");
         out.append("connect-retry 1 1\n");
         out.append("connect-retry-max 1\n");
+        out.append("resolv-retry 3\n");
         out.append("block-ipv6\n");
 
         return out.toString();
@@ -893,11 +903,20 @@ public class MainActivity extends Activity {
     private void startPending(){
         if(vpnController==null||pending==null)return;
 
+        connectionAttempt=true;
+        connected=false;
+        h.removeCallbacks(connectTimeout);
+        h.postDelayed(connectTimeout,20000);
+
+        connectText.setText("CANCEL");
         status.setText("Connecting...");
+        status.setTextColor(Ui.CYAN);
         vpnController.start(pending);
     }
 
     private void disconnect(){
+        h.removeCallbacks(connectTimeout);
+        connectionAttempt=false;
         if(vpnController!=null) vpnController.stop();
 
         connected=false;
@@ -911,27 +930,56 @@ public class MainActivity extends Activity {
     }
 
     private void applyState(String state,String message){
-        String s=state==null?"":state.toUpperCase(Locale.US);
+        String s=state==null?"":state.toUpperCase(Locale.US).trim();
 
-        status.setText(state==null?"Unknown":state.replace("_"," "));
-
-        if(s.contains("CONNECTED")&&!connected){
+        if("CONNECTED".equals(s)){
+            h.removeCallbacks(connectTimeout);
+            connectionAttempt=false;
             connected=true;
+
             baseRx=TrafficStats.getTotalRxBytes();
             baseTx=TrafficStats.getTotalTxBytes();
 
             connectText.setText("DISCONNECT");
             connectCircle.setBackground(Ui.gradient(this,Ui.GREEN,0xff1bad86,100));
+            status.setText("CONNECTED");
             status.setTextColor(Ui.GREEN);
             checkIp();
+            return;
+        }
 
-        }else if(!s.contains("CONNECTED")
-                &&(s.contains("DISCONNECTED")||s.contains("NOPROCESS"))){
+        if("CONNECTING".equals(s)
+                ||"RESOLVE".equals(s)
+                ||"WAIT".equals(s)
+                ||"GET_CONFIG".equals(s)
+                ||"ASSIGN_IP".equals(s)
+                ||"RECONNECTING".equals(s)){
+            if(connectionAttempt){
+                connectText.setText("CANCEL");
+                status.setText("Connecting...");
+                status.setTextColor(Ui.CYAN);
+            }
+            return;
+        }
 
+        if("DISCONNECTED".equals(s)
+                ||"IDLE".equals(s)
+                ||"READYFORCONNECT".equals(s)
+                ||"NOPROCESS".equals(s)){
+            boolean wasAttempt=connectionAttempt;
+            connectionAttempt=false;
             connected=false;
+            h.removeCallbacks(connectTimeout);
+
             connectText.setText("CONNECT");
             connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
+            status.setText(wasAttempt?"Connection failed. Choose another server.":"Disconnected");
             status.setTextColor(Ui.MUTED);
+            return;
+        }
+
+        if(!s.isEmpty()){
+            status.setText(s.replace("_"," "));
         }
     }
 
