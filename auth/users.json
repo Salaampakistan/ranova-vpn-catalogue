@@ -1,15 +1,5 @@
 {
-  "schema": 1,
-  "updated_at": "2026-09-26T09:30:00Z",
-  "users": [
-    {
-      "username": "rana-owner",
-      "display_name": "Mr. Rana",
-      "role": "owner",
-      "enabled": true,
-      "iterations": 180000,
-      "salt_b64": "USX8uLQ0aHGlqzlXGPrBMA==",
-      "password_hash_b64": "k7PkgkUz5tXV3fExh1tAP4tAFxrXcCfAnOL8OaWkExo="
-    }
-  ]
+  "schema": 2,
+  "updated_at": "2026-09-26T15:50:00+04:00",
+  "users": []
 }
