@@ -1,0 +1,42 @@
+name: Update RANOVA VPN catalogue
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ranova-vpn-catalogue
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch and validate VPN catalogue
+        run: python scripts/update_catalogue.py
+
+      - name: Commit catalogue if changed
+        shell: bash
+        run: |
+          if git diff --quiet -- servers.json; then
+            echo "No catalogue changes."
+            exit 0
+          fi
+          git config user.name "ranova-catalogue-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add servers.json
+          git commit -m "Update VPN server catalogue"
+          git push
