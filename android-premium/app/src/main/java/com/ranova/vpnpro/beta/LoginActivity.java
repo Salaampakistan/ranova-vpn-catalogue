@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.InputType;
-import android.util.Base64;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
@@ -14,35 +13,35 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import java.security.MessageDigest;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.Arrays;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
 
 public class LoginActivity extends Activity {
-    private static final String EXPECTED_USER = "rana-owner";
-    private static final int ITERATIONS = 180000;
-    private static final String SALT_B64 = "USX8uLQ0aHGlqzlXGPrBMA==";
-    private static final String HASH_B64 = "k7PkgkUz5tXV3fExh1tAP4tAFxrXcCfAnOL8OaWkExo=";
-
     private EditText user, pass;
-    private TextView msg;
+    private TextView msg, sub;
     private Button login;
     private ProgressBar progress;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+
         SharedPreferences sp=getSharedPreferences("session",MODE_PRIVATE);
-        if (sp.getLong("expiry",0)>System.currentTimeMillis()) {
+        if(sp.getLong("expiry",0)>System.currentTimeMillis()) {
             dashboard();
             return;
         }
 
+        buildUi();
+    }
+
+    private void buildUi() {
         ScrollView scroll=new ScrollView(this);
         LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setPadding(Ui.dp(this,24),Ui.dp(this,36),Ui.dp(this,24),Ui.dp(this,24));
+        root.setPadding(Ui.dp(this,24),Ui.dp(this,34),Ui.dp(this,24),Ui.dp(this,24));
         root.setBackground(Ui.gradient(this,Ui.BG,0xff101a39,0));
         scroll.addView(root);
 
@@ -54,7 +53,11 @@ public class LoginActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         root.addView(title);
 
-        TextView sub=Ui.text(this,"Owner-controlled RANOVA account",14,Ui.MUTED,false);
+        sub=Ui.text(this,
+                OwnerStore.initialized(this)
+                        ?"Owner-controlled RANOVA access"
+                        :"First launch: activate owner account",
+                14,Ui.MUTED,false);
         sub.setGravity(Gravity.CENTER);
         sub.setPadding(0,Ui.dp(this,6),0,Ui.dp(this,24));
         root.addView(sub);
@@ -62,18 +65,24 @@ public class LoginActivity extends Activity {
         LinearLayout card=Ui.card(this);
         root.addView(card);
 
-        card.addView(label("RANOVA ID"));
+        TextView ul=Ui.text(this,"RANOVA ID",11,Ui.CYAN,true);
+        ul.setLetterSpacing(.08f);
+        card.addView(ul);
+
         user=field("Username",false);
+        if(!OwnerStore.initialized(this)) user.setText("Salampakistan");
         card.addView(user);
 
-        TextView pl=label("PASSWORD");
+        TextView pl=Ui.text(this,"PASSWORD",11,Ui.CYAN,true);
+        pl.setLetterSpacing(.08f);
         pl.setPadding(0,Ui.dp(this,16),0,0);
         card.addView(pl);
+
         pass=field("Password",true);
         card.addView(pass);
 
         login=new Button(this);
-        login.setText("Unlock RANOVA");
+        login.setText(OwnerStore.initialized(this)?"Unlock RANOVA":"Activate Owner");
         login.setAllCaps(false);
         login.setTextColor(0xff06111f);
         login.setTextSize(15);
@@ -89,27 +98,20 @@ public class LoginActivity extends Activity {
         progress.setLayoutParams(pp);
         card.addView(progress);
 
-        msg=Ui.text(this,"",13,Ui.RED,false);
+        msg=Ui.text(this,
+                OwnerStore.initialized(this)
+                        ?""
+                        :"Set your owner password once. It is stored as a local PBKDF2 hash, not plaintext.",
+                12,OwnerStore.initialized(this)?Ui.RED:Ui.MUTED,false);
         msg.setGravity(Gravity.CENTER);
         msg.setPadding(0,Ui.dp(this,10),0,0);
         card.addView(msg);
-
-        TextView note=Ui.text(this,"Beta owner access. Production user accounts will use revocable server-side access.",12,Ui.MUTED,false);
-        note.setGravity(Gravity.CENTER);
-        note.setPadding(0,Ui.dp(this,20),0,0);
-        root.addView(note);
 
         login.setOnClickListener(v->authenticate());
         setContentView(scroll);
     }
 
-    private TextView label(String s) {
-        TextView t=Ui.text(this,s,11,Ui.CYAN,true);
-        t.setLetterSpacing(.08f);
-        return t;
-    }
-
-    private EditText field(String hint, boolean password) {
+    private EditText field(String hint,boolean password) {
         EditText e=new EditText(this);
         e.setHint(hint);
         e.setHintTextColor(0xff7786a5);
@@ -118,7 +120,9 @@ public class LoginActivity extends Activity {
         e.setTextSize(16);
         e.setPadding(Ui.dp(this,13),Ui.dp(this,10),Ui.dp(this,13),Ui.dp(this,10));
         e.setBackground(Ui.fieldBg(this));
-        if(password) e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        if(password) {
+            e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        }
         return e;
     }
 
@@ -126,53 +130,92 @@ public class LoginActivity extends Activity {
         final String u=user.getText().toString().trim();
         final char[] pw=pass.getText().toString().toCharArray();
 
-        if(u.isEmpty()||pw.length==0){
-            msg.setText("Enter username and password.");
+        if(u.isEmpty()||pw.length<6) {
+            msg.setText("Enter username and a password of at least 6 characters.");
+            msg.setTextColor(Ui.RED);
             return;
         }
 
         login.setEnabled(false);
         progress.setVisibility(ProgressBar.VISIBLE);
         msg.setText("Checking access...");
+        msg.setTextColor(Ui.MUTED);
 
-        new Thread(() -> {
+        new Thread(()->{
             try {
-                if(!EXPECTED_USER.equalsIgnoreCase(u)) throw new SecurityException();
+                if(!OwnerStore.initialized(this)) {
+                    if(!"Salampakistan".equalsIgnoreCase(u)) throw new SecurityException();
+                    OwnerStore.initialize(this,u,pw);
+                    saveSession(u,"Mr. Rana","owner");
+                    runOnUiThread(this::dashboard);
+                    return;
+                }
 
-                byte[] salt=Base64.decode(SALT_B64,Base64.DEFAULT);
-                byte[] expected=Base64.decode(HASH_B64,Base64.DEFAULT);
-                PBEKeySpec spec=new PBEKeySpec(pw,salt,ITERATIONS,expected.length*8);
-                byte[] actual=SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-                        .generateSecret(spec).getEncoded();
-                spec.clearPassword();
+                if(OwnerStore.verify(this,u,pw)) {
+                    saveSession(OwnerStore.username(this),"Mr. Rana","owner");
+                    runOnUiThread(this::dashboard);
+                    return;
+                }
 
-                if(!MessageDigest.isEqual(actual,expected)) throw new SecurityException();
+                JSONObject root=RemoteAuth.fetch();
+                JSONArray users=root.optJSONArray("users");
+                JSONObject match=null;
 
-                getSharedPreferences("session",MODE_PRIVATE).edit()
-                        .putString("username",u)
-                        .putString("display_name","Mr. Rana")
-                        .putString("role","owner")
-                        .putLong("expiry",System.currentTimeMillis()+12L*60L*60L*1000L)
-                        .apply();
+                if(users!=null) {
+                    for(int i=0;i<users.length();i++) {
+                        JSONObject x=users.getJSONObject(i);
+                        if(u.equalsIgnoreCase(x.optString("username"))) {
+                            match=x;
+                            break;
+                        }
+                    }
+                }
+
+                if(match==null||!match.optBoolean("enabled",false))
+                    throw new SecurityException();
+
+                int iterations=match.optInt("iterations",AuthUtil.ITERATIONS);
+                if(!AuthUtil.verify(
+                        pw,
+                        match.getString("salt_b64"),
+                        match.getString("password_hash_b64"),
+                        iterations))
+                    throw new SecurityException();
+
+                saveSession(
+                        match.getString("username"),
+                        match.optString("display_name",match.getString("username")),
+                        match.optString("role","user"));
 
                 runOnUiThread(this::dashboard);
+
             } catch(SecurityException e) {
-                runOnUiThread(()->fail("Invalid RANOVA access."));
+                runOnUiThread(()->fail("Invalid or disabled RANOVA access."));
             } catch(Exception e) {
-                runOnUiThread(()->fail("Login error: "+e.getClass().getSimpleName()));
+                runOnUiThread(()->fail("Login service unavailable: "+e.getClass().getSimpleName()));
             } finally {
                 Arrays.fill(pw,'\0');
             }
         }).start();
     }
 
-    private void fail(String s){
+    private void saveSession(String username,String display,String role) {
+        getSharedPreferences("session",MODE_PRIVATE).edit()
+                .putString("username",username)
+                .putString("display_name",display)
+                .putString("role",role)
+                .putLong("expiry",System.currentTimeMillis()+12L*60L*60L*1000L)
+                .apply();
+    }
+
+    private void fail(String s) {
         msg.setText(s);
+        msg.setTextColor(Ui.RED);
         login.setEnabled(true);
         progress.setVisibility(ProgressBar.GONE);
     }
 
-    private void dashboard(){
+    private void dashboard() {
         startActivity(new Intent(this,MainActivity.class));
         finish();
     }
