@@ -2,6 +2,10 @@ name: Update RANOVA VPN catalogue
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "scripts/update_catalogue.py"
+      - ".github/workflows/update-catalogue.yml"
   schedule:
     - cron: "17 */6 * * *"
 
