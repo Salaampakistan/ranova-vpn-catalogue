@@ -1,0 +1,22 @@
+plugins {
+    id "com.android.application"
+}
+android {
+    namespace "com.ranova.vpnpro.beta"
+    compileSdk 35
+    defaultConfig {
+        applicationId "com.ranova.vpnpro.beta"
+        minSdk 26
+        targetSdk 35
+        versionCode 3
+        versionName "0.3-premium-beta"
+    }
+    buildFeatures {
+        aidl true
+        buildConfig false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
