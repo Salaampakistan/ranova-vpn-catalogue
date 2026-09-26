@@ -489,12 +489,229 @@ public class MainActivity extends Activity {
     }
 
     private void showAccessControl(){
+        if(!"owner".equalsIgnoreCase(
+                getSharedPreferences("session",MODE_PRIVATE).getString("role","user"))){
+            return;
+        }
+
+        String[] items={
+                "View Users",
+                "Create / Reset User",
+                "Enable User",
+                "Disable User",
+                "Delete User",
+                AdminTokenStore.has(this)?"Change GitHub Admin Token":"Set GitHub Admin Token",
+                "Remove Saved Admin Token"
+        };
+
         new AlertDialog.Builder(this)
-                .setTitle("User Management")
-                .setMessage(
-                        "Owner account management is active.\n\n"+
-                        "Separate users on other phones need a private authentication backend before RANOVA can safely create, disable and reset their accounts from inside the app. "+
-                        "This menu is reserved for that secure backend.")
+                .setTitle("Access Control")
+                .setItems(items,(d,which)->{
+                    if(which==0) viewRemoteUsers();
+                    else if(which==1) createRemoteUser();
+                    else if(which==2) userAction("Enable User","enable");
+                    else if(which==3) userAction("Disable User","disable");
+                    else if(which==4) userAction("Delete User","delete");
+                    else if(which==5) promptAdminToken();
+                    else if(which==6) {
+                        AdminTokenStore.clear(this);
+                        Toast.makeText(this,"Admin token removed.",Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    private boolean requireAdminToken(){
+        if(AdminTokenStore.has(this)) return true;
+        promptAdminToken();
+        return false;
+    }
+
+    private void promptAdminToken(){
+        final EditText input=new EditText(this);
+        input.setHint("Fine-grained GitHub token");
+        input.setSingleLine(true);
+        input.setTextColor(Ui.TEXT);
+        input.setHintTextColor(0xff7887a5);
+        input.setBackground(Ui.fieldBg(this));
+        input.setPadding(Ui.dp(this,12),Ui.dp(this,10),Ui.dp(this,12),Ui.dp(this,10));
+
+        new AlertDialog.Builder(this)
+                .setTitle("Owner Admin Token")
+                .setMessage("Paste a fine-grained GitHub token with Contents: Read and write access to only ranova-vpn-catalogue. It stays on this owner phone.")
+                .setView(input)
+                .setPositiveButton("Save",(d,w)->{
+                    String token=input.getText().toString().trim();
+                    if(token.length()<20) {
+                        Toast.makeText(this,"Token looks invalid.",Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    AdminTokenStore.save(this,token);
+                    Toast.makeText(this,"Admin token saved.",Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel",null)
+                .show();
+    }
+
+    private void viewRemoteUsers(){
+        if(!requireAdminToken()) return;
+        status.setText("Loading users...");
+
+        new Thread(()->{
+            try{
+                JSONObject root=RemoteUserManager.read(AdminTokenStore.get(this));
+                JSONArray arr=root.optJSONArray("users");
+                StringBuilder out=new StringBuilder();
+
+                if(arr==null||arr.length()==0){
+                    out.append("No secondary users created.");
+                }else{
+                    for(int i=0;i<arr.length();i++){
+                        JSONObject x=arr.getJSONObject(i);
+                        out.append(x.optBoolean("enabled",false)?"● ":"○ ")
+                                .append(x.optString("username"))
+                                .append("  •  ")
+                                .append(x.optString("display_name",x.optString("username")))
+                                .append("\n");
+                    }
+                }
+
+                String text=out.toString().trim();
+                runOnUiThread(()->{
+                    status.setText("Ready to connect");
+                    new AlertDialog.Builder(this)
+                            .setTitle("RANOVA Users")
+                            .setMessage(text)
+                            .setPositiveButton("OK",null)
+                            .show();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->adminError(e));
+            }
+        }).start();
+    }
+
+    private void createRemoteUser(){
+        if(!requireAdminToken()) return;
+
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(Ui.dp(this,8),Ui.dp(this,4),Ui.dp(this,8),0);
+
+        EditText u=adminField("Username");
+        EditText n=adminField("Display name");
+        EditText p=adminField("Password");
+        p.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        box.addView(u);
+        box.addView(n);
+        box.addView(p);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Create / Reset User")
+                .setMessage("This user can sign in on another phone with only this username and password.")
+                .setView(box)
+                .setPositiveButton("Publish",(d,w)->{
+                    String username=u.getText().toString().trim();
+                    String display=n.getText().toString().trim();
+                    char[] pw=p.getText().toString().toCharArray();
+
+                    if(username.length()<4||pw.length<8){
+                        Toast.makeText(this,"Username 4+ chars and password 8+ chars.",Toast.LENGTH_LONG).show();
+                        java.util.Arrays.fill(pw,'\0');
+                        return;
+                    }
+                    if(username.equalsIgnoreCase(OwnerStore.username(this))){
+                        Toast.makeText(this,"Owner username cannot be used as a secondary user.",Toast.LENGTH_LONG).show();
+                        java.util.Arrays.fill(pw,'\0');
+                        return;
+                    }
+                    if(display.isEmpty()) display=username;
+
+                    final String finalDisplay=display;
+                    status.setText("Publishing user...");
+
+                    new Thread(()->{
+                        try{
+                            RemoteUserManager.upsertUser(
+                                    AdminTokenStore.get(this),
+                                    username,
+                                    finalDisplay,
+                                    pw);
+                            runOnUiThread(()->{
+                                status.setText("Ready to connect");
+                                Toast.makeText(this,"User published. They can now sign in.",Toast.LENGTH_LONG).show();
+                            });
+                        }catch(Exception e){
+                            runOnUiThread(()->adminError(e));
+                        }finally{
+                            java.util.Arrays.fill(pw,'\0');
+                        }
+                    }).start();
+                })
+                .setNegativeButton("Cancel",null)
+                .show();
+    }
+
+    private void userAction(String title,String action){
+        if(!requireAdminToken()) return;
+
+        EditText input=adminField("Username");
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(input)
+                .setPositiveButton("Confirm",(d,w)->{
+                    String username=input.getText().toString().trim();
+                    if(username.isEmpty()) return;
+
+                    status.setText(title+"...");
+                    new Thread(()->{
+                        try{
+                            if("enable".equals(action))
+                                RemoteUserManager.setEnabled(AdminTokenStore.get(this),username,true);
+                            else if("disable".equals(action))
+                                RemoteUserManager.setEnabled(AdminTokenStore.get(this),username,false);
+                            else
+                                RemoteUserManager.deleteUser(AdminTokenStore.get(this),username);
+
+                            runOnUiThread(()->{
+                                status.setText("Ready to connect");
+                                Toast.makeText(this,title+" completed.",Toast.LENGTH_LONG).show();
+                            });
+                        }catch(Exception e){
+                            runOnUiThread(()->adminError(e));
+                        }
+                    }).start();
+                })
+                .setNegativeButton("Cancel",null)
+                .show();
+    }
+
+    private EditText adminField(String hint){
+        EditText e=new EditText(this);
+        e.setHint(hint);
+        e.setSingleLine(true);
+        e.setTextColor(Ui.TEXT);
+        e.setHintTextColor(0xff7887a5);
+        e.setBackground(Ui.fieldBg(this));
+        e.setPadding(Ui.dp(this,12),Ui.dp(this,9),Ui.dp(this,12),Ui.dp(this,9));
+
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin=Ui.dp(this,8);
+        e.setLayoutParams(lp);
+        return e;
+    }
+
+    private void adminError(Exception e){
+        status.setText("User management error");
+        String message=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();
+        new AlertDialog.Builder(this)
+                .setTitle("Access Control Error")
+                .setMessage(message)
                 .setPositiveButton("OK",null)
                 .show();
     }
