@@ -1,0 +1,13 @@
+RANOVA VPN PRO Premium Beta
+
+This beta keeps the proven RANOVA automatic server catalogue and uses the
+separately installed OpenVPN for Android application through its documented
+external AIDL API.
+
+It does not embed the upstream OpenVPN for Android application code.
+
+The external API / remoteExample interface is provided upstream under
+Apache License 2.0:
+https://github.com/schwabe/ics-openvpn
+
+Final standalone engine integration is a separate phase.
