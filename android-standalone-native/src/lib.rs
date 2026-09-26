@@ -1,4 +1,4 @@
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use jni::{
     objects::{GlobalRef, JObject, JString, JValue},
@@ -15,7 +15,7 @@ fn client_slot() -> &'static Mutex<Option<Client>> {
 
 #[derive(Clone)]
 struct JavaBridge {
-    vm: JavaVM,
+    vm: Arc<JavaVM>,
     service: GlobalRef,
 }
 
@@ -300,7 +300,7 @@ pub extern "system" fn Java_com_ranova_vpnpro_beta_StandaloneVpnService_nativeSt
         Err(_) => return -3,
     };
 
-    let bridge = JavaBridge { vm, service: global };
+    let bridge = JavaBridge { vm: Arc::new(vm), service: global };
     let handler = Handler {
         tunnel: AndroidTunnel { bridge: bridge.clone() },
         bridge: bridge.clone(),
