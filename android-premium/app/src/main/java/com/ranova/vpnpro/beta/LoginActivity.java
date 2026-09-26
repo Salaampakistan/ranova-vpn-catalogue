@@ -27,6 +27,11 @@ public class LoginActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
 
+        if(getIntent().getBooleanExtra("change_owner",false)) {
+            buildOwnerChange();
+            return;
+        }
+
         SharedPreferences sp=getSharedPreferences("session",MODE_PRIVATE);
         if(sp.getLong("expiry",0)>System.currentTimeMillis()) {
             dashboard();
@@ -108,6 +113,99 @@ public class LoginActivity extends Activity {
         card.addView(msg);
 
         login.setOnClickListener(v->authenticate());
+        setContentView(scroll);
+    }
+
+    private void buildOwnerChange() {
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout root=new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(Ui.dp(this,24),Ui.dp(this,34),Ui.dp(this,24),Ui.dp(this,24));
+        root.setBackground(Ui.gradient(this,Ui.BG,0xff101a39,0));
+        scroll.addView(root);
+
+        LogoView logo=new LogoView(this);
+        logo.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this,104),Ui.dp(this,104)));
+        root.addView(logo);
+
+        TextView title=Ui.text(this,"OWNER ACCOUNT",26,Ui.TEXT,true);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title);
+
+        TextView note=Ui.text(this,"Change the RANOVA owner username and password",13,Ui.MUTED,false);
+        note.setGravity(Gravity.CENTER);
+        note.setPadding(0,Ui.dp(this,6),0,Ui.dp(this,20));
+        root.addView(note);
+
+        LinearLayout card=Ui.card(this);
+        root.addView(card);
+
+        EditText u=field("Owner username",false);
+        u.setText(OwnerStore.username(this));
+        card.addView(u);
+
+        EditText p1=field("New password",true);
+        LinearLayout.LayoutParams p1lp=new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        p1lp.topMargin=Ui.dp(this,10);
+        p1.setLayoutParams(p1lp);
+        card.addView(p1);
+
+        EditText p2=field("Confirm new password",true);
+        LinearLayout.LayoutParams p2lp=new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        p2lp.topMargin=Ui.dp(this,10);
+        p2.setLayoutParams(p2lp);
+        card.addView(p2);
+
+        TextView status=Ui.text(this,"",12,Ui.RED,false);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(0,Ui.dp(this,10),0,0);
+        card.addView(status);
+
+        Button save=new Button(this);
+        save.setText("Save Owner Login");
+        save.setAllCaps(false);
+        save.setTextColor(0xff06111f);
+        save.setBackground(Ui.gradient(this,Ui.CYAN,0xff6598ff,18));
+        Ui.topMargin(save,this,18);
+        card.addView(save);
+
+        save.setOnClickListener(v->{
+            String nu=u.getText().toString().trim();
+            char[] a=p1.getText().toString().toCharArray();
+            char[] b=p2.getText().toString().toCharArray();
+
+            try {
+                if(nu.length()<4||a.length<8||!java.util.Arrays.equals(a,b)) {
+                    status.setText("Username 4+ chars, password 8+ chars, and both passwords must match.");
+                    return;
+                }
+
+                OwnerStore.update(this,nu,a);
+                getSharedPreferences("session",MODE_PRIVATE).edit()
+                        .putString("username",nu)
+                        .putString("display_name","Mr. Rana")
+                        .putString("role","owner")
+                        .putLong("expiry",System.currentTimeMillis()+12L*60L*60L*1000L)
+                        .apply();
+
+                java.util.Arrays.fill(a,'\0');
+                java.util.Arrays.fill(b,'\0');
+
+                Intent i=new Intent(this,MainActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+                finish();
+
+            } catch(Exception e) {
+                status.setText("Could not update owner login.");
+            }
+        });
+
         setContentView(scroll);
     }
 
