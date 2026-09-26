@@ -2,17 +2,13 @@ package com.ranova.vpnpro.beta;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.net.TrafficStats;
+import android.net.VpnService;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
-import android.os.RemoteException;
 import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
@@ -37,13 +33,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import de.blinkt.openvpn.api.IOpenVPNAPIService;
-import de.blinkt.openvpn.api.IOpenVPNStatusCallback;
 
 public class MainActivity extends Activity {
     private static final String CATALOGUE =
             "https://raw.githubusercontent.com/etoedxb-jpg/ranova-vpn-catalogue/main/servers.json";
-    private static final int REQ_API=301, REQ_VPN=302;
+    private static final int REQ_VPN=302;
 
     private final List<Server> servers=new ArrayList<>();
     private Server selected;
@@ -51,8 +45,7 @@ public class MainActivity extends Activity {
     private TextView flag,country,detail,status,ip,inText,outText,ping,speed,load,proto,connectText;
     private LinearLayout connectCircle;
 
-    private IOpenVPNAPIService vpn;
-    private boolean bound=false;
+    private EmbeddedVpnController vpnController;
     private boolean connected=false;
     private String pending;
     private long baseRx=-1,baseTx=-1;
@@ -70,26 +63,6 @@ public class MainActivity extends Activity {
         }
     };
 
-    private final IOpenVPNStatusCallback cb=new IOpenVPNStatusCallback.Stub(){
-        @Override public void newStatus(String uuid,String state,String message,String level){
-            runOnUiThread(()->applyState(state,message));
-        }
-    };
-
-    private final ServiceConnection conn=new ServiceConnection(){
-        @Override public void onServiceConnected(ComponentName n,IBinder b){
-            vpn=IOpenVPNAPIService.Stub.asInterface(b);
-            bound=true;
-            status.setText("Engine ready");
-            requestApi();
-        }
-        @Override public void onServiceDisconnected(ComponentName n){
-            vpn=null;
-            bound=false;
-            status.setText("Engine disconnected");
-        }
-    };
-
     @Override protected void onCreate(Bundle b){
         super.onCreate(b);
 
@@ -100,24 +73,26 @@ public class MainActivity extends Activity {
         }
 
         buildUi();
+
+        vpnController=new EmbeddedVpnController(this,new EmbeddedVpnController.Listener(){
+            @Override public void onState(String state){
+                runOnUiThread(()->applyState(state,null));
+            }
+
+            @Override public void onError(String message){
+                runOnUiThread(()->status.setText(message));
+            }
+        });
+        vpnController.bind();
+
         fetchCatalogue();
         h.post(traffic);
         checkIp();
     }
 
-    @Override protected void onStart(){
-        super.onStart();
-        bindOpenVpn();
-    }
-
     @Override protected void onDestroy(){
         h.removeCallbacks(traffic);
-        if(vpn!=null){
-            try{vpn.unregisterStatusCallback(cb);}catch(Exception ignored){}
-        }
-        if(bound){
-            try{unbindService(conn);}catch(Exception ignored){}
-        }
+        if(vpnController!=null) vpnController.release();
         super.onDestroy();
     }
 
@@ -858,47 +833,9 @@ public class MainActivity extends Activity {
         connect();
     }
 
-    private void bindOpenVpn(){
-        Intent i=new Intent(IOpenVPNAPIService.class.getName());
-        i.setPackage("de.blinkt.openvpn");
-
-        try{
-            boolean ok=bindService(i,conn,Context.BIND_AUTO_CREATE);
-            if(!ok)status.setText("Install OpenVPN for Android");
-        }catch(Exception e){
-            status.setText("OpenVPN engine unavailable");
-        }
-    }
-
-    private void requestApi(){
-        if(vpn==null)return;
-
-        try{
-            Intent i=vpn.prepare(getPackageName());
-            if(i!=null)startActivityForResult(i,REQ_API);
-            else apiReady();
-        }catch(RemoteException e){
-            status.setText("API access error");
-        }
-    }
-
-    private void apiReady(){
-        try{
-            vpn.registerStatusCallback(cb);
-            status.setText("Ready to connect");
-        }catch(Exception e){
-            status.setText("Engine callback error");
-        }
-    }
-
     private void connect(){
         if(selected==null){
             status.setText("Select a location");
-            return;
-        }
-
-        if(vpn==null){
-            status.setText("OpenVPN for Android required");
             return;
         }
 
@@ -912,46 +849,64 @@ public class MainActivity extends Activity {
                 throw new IllegalStateException();
             }
 
-            pending=cfg;
+            pending=sanitizeEmbeddedProfile(cfg);
             saveRecent(selected);
             status.setText("Preparing secure tunnel...");
 
-            Intent p=vpn.prepareVPNService();
-            if(p==null)startPending();
-            else startActivityForResult(p,REQ_VPN);
+            Intent permission=VpnService.prepare(this);
+            if(permission==null) startPending();
+            else startActivityForResult(permission,REQ_VPN);
 
         }catch(Exception e){
             status.setText("Connect setup failed");
         }
     }
 
-    private void startPending(){
-        if(vpn==null||pending==null)return;
+    private static String sanitizeEmbeddedProfile(String raw){
+        StringBuilder out=new StringBuilder();
 
-        try{
-            status.setText("Connecting...");
-            vpn.startVPN(pending);
-        }catch(Exception e){
-            status.setText("VPN start failed");
+        for(String line:raw.replace("\r\n","\n").replace("\r","\n").split("\n")){
+            String t=line.trim().toLowerCase(Locale.US);
+
+            if(t.startsWith("cipher ")
+                    ||t.startsWith("data-ciphers ")
+                    ||t.startsWith("data-ciphers-fallback ")
+                    ||t.startsWith("keysize ")
+                    ||t.startsWith("connect-retry ")
+                    ||t.startsWith("connect-retry-max ")){
+                continue;
+            }
+
+            out.append(line).append("\n");
         }
+
+        out.append("cipher CHACHA20-POLY1305\n");
+        out.append("data-ciphers CHACHA20-POLY1305:AES-256-GCM:AES-128-GCM\n");
+        out.append("connect-retry 1 1\n");
+        out.append("connect-retry-max 1\n");
+        out.append("block-ipv6\n");
+
+        return out.toString();
+    }
+
+    private void startPending(){
+        if(vpnController==null||pending==null)return;
+
+        status.setText("Connecting...");
+        vpnController.start(pending);
     }
 
     private void disconnect(){
-        if(vpn==null)return;
+        if(vpnController!=null) vpnController.stop();
 
-        try{
-            vpn.disconnect();
-            connected=false;
-            connectText.setText("CONNECT");
-            connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
-            status.setText("Disconnected");
-            status.setTextColor(Ui.MUTED);
-            inText.setText("0 B");
-            outText.setText("0 B");
-            checkIp();
-        }catch(Exception e){
-            status.setText("Disconnect failed");
-        }
+        connected=false;
+        connectText.setText("CONNECT");
+        connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
+        status.setText("Disconnected");
+        status.setTextColor(Ui.MUTED);
+        inText.setText("0 B");
+        outText.setText("0 B");
+        checkIp();
     }
 
     private void applyState(String state,String message){
@@ -1014,8 +969,7 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if(req==REQ_API)apiReady();
-        else if(req==REQ_VPN)startPending();
+        if(req==REQ_VPN)startPending();
     }
 
     private void logout(){
