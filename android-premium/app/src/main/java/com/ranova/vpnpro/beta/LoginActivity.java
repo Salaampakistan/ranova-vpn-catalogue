@@ -27,6 +27,9 @@ public class LoginActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
 
+        boolean migrated=OwnerStore.ensureCurrentDefault(this);
+        if(migrated) getSharedPreferences("session",MODE_PRIVATE).edit().clear().apply();
+
         if(getIntent().getBooleanExtra("change_owner",false)) {
             buildOwnerChange();
             return;
@@ -59,9 +62,7 @@ public class LoginActivity extends Activity {
         root.addView(title);
 
         sub=Ui.text(this,
-                OwnerStore.initialized(this)
-                        ?"Owner-controlled RANOVA access"
-                        :"First launch: activate owner account",
+                "Owner-controlled RANOVA access",
                 14,Ui.MUTED,false);
         sub.setGravity(Gravity.CENTER);
         sub.setPadding(0,Ui.dp(this,6),0,Ui.dp(this,24));
@@ -75,7 +76,7 @@ public class LoginActivity extends Activity {
         card.addView(ul);
 
         user=field("Username",false);
-        if(!OwnerStore.initialized(this)) user.setText("Salampakistan");
+        user.setText(OwnerStore.username(this));
         card.addView(user);
 
         TextView pl=Ui.text(this,"PASSWORD",11,Ui.CYAN,true);
@@ -87,7 +88,7 @@ public class LoginActivity extends Activity {
         card.addView(pass);
 
         login=new Button(this);
-        login.setText(OwnerStore.initialized(this)?"Unlock RANOVA":"Activate Owner");
+        login.setText("Unlock RANOVA");
         login.setAllCaps(false);
         login.setTextColor(0xff06111f);
         login.setTextSize(15);
@@ -103,11 +104,7 @@ public class LoginActivity extends Activity {
         progress.setLayoutParams(pp);
         card.addView(progress);
 
-        msg=Ui.text(this,
-                OwnerStore.initialized(this)
-                        ?""
-                        :"Set your owner password once. It is stored as a local PBKDF2 hash, not plaintext.",
-                12,OwnerStore.initialized(this)?Ui.RED:Ui.MUTED,false);
+        msg=Ui.text(this,"",12,Ui.RED,false);
         msg.setGravity(Gravity.CENTER);
         msg.setPadding(0,Ui.dp(this,10),0,0);
         card.addView(msg);
@@ -241,14 +238,6 @@ public class LoginActivity extends Activity {
 
         new Thread(()->{
             try {
-                if(!OwnerStore.initialized(this)) {
-                    if(!"Salampakistan".equalsIgnoreCase(u)) throw new SecurityException();
-                    OwnerStore.initialize(this,u,pw);
-                    saveSession(u,"Mr. Rana","owner");
-                    runOnUiThread(this::dashboard);
-                    return;
-                }
-
                 if(OwnerStore.verify(this,u,pw)) {
                     saveSession(OwnerStore.username(this),"Mr. Rana","owner");
                     runOnUiThread(this::dashboard);
