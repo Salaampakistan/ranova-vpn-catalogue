@@ -23,6 +23,7 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -137,6 +138,8 @@ public class MainActivity extends Activity {
 
         LogoView lv=new LogoView(this);
         top.addView(lv,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,58)));
+        lv.setContentDescription("Open RANOVA menu");
+        lv.setOnClickListener(v->showMainMenu());
 
         LinearLayout titles=new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
@@ -441,6 +444,186 @@ public class MainActivity extends Activity {
             d.dismiss();
         });
 
+        list.setOnItemLongClickListener((p,v,pos,id)->{
+            toggleFavorite(filtered.get(pos));
+            Toast.makeText(this,"Favorite updated.",Toast.LENGTH_SHORT).show();
+            return true;
+        });
+
+        d.show();
+    }
+
+    private void showMainMenu(){
+        ArrayList<String> items=new ArrayList<>();
+        for(String x:MenuScreen.ITEMS){
+            if("Access Control".equals(x)
+                    && !"owner".equalsIgnoreCase(
+                    getSharedPreferences("session",MODE_PRIVATE).getString("role","user"))) {
+                continue;
+            }
+            items.add(x);
+        }
+
+        String[] menu=items.toArray(new String[0]);
+
+        new AlertDialog.Builder(this)
+                .setTitle("RANOVA Control Center")
+                .setItems(menu,(d,which)->{
+                    String item=menu[which];
+
+                    if("Locations".equals(item)) picker();
+                    else if("Smart Connect".equals(item)) smartConnect();
+                    else if("Favorites".equals(item)) showFavorites();
+                    else if("Recent Servers".equals(item)) showRecent();
+                    else if("My Account".equals(item)) {
+                        Intent i=new Intent(this,LoginActivity.class);
+                        i.putExtra("change_owner",true);
+                        startActivity(i);
+                    }
+                    else if("Access Control".equals(item)) showAccessControl();
+                    else if("Settings".equals(item)) showSettings();
+                    else if("About".equals(item)) showAbout();
+                    else if("Logout".equals(item)) logout();
+                })
+                .show();
+    }
+
+    private void showAccessControl(){
+        new AlertDialog.Builder(this)
+                .setTitle("User Management")
+                .setMessage(
+                        "Owner account management is active.\n\n"+
+                        "Separate users on other phones need a private authentication backend before RANOVA can safely create, disable and reset their accounts from inside the app. "+
+                        "This menu is reserved for that secure backend.")
+                .setPositiveButton("OK",null)
+                .show();
+    }
+
+    private void showSettings(){
+        new AlertDialog.Builder(this)
+                .setTitle("Settings")
+                .setMessage(
+                        "Automatic catalogue: ON\n"+
+                        "Smart Connect: ON\n"+
+                        "Country flags: ON\n"+
+                        "Live IN / OUT: ON\n"+
+                        "Session timeout: 12 hours")
+                .setPositiveButton("OK",null)
+                .show();
+    }
+
+    private void showAbout(){
+        new AlertDialog.Builder(this)
+                .setTitle("RANOVA VPN PRO")
+                .setMessage(
+                        "Premium Beta 0.4\n\n"+
+                        "Owner: Muhammad Ali Adeel\n"+
+                        "Automatic VPN catalogue, smart connect and premium connection dashboard.")
+                .setPositiveButton("OK",null)
+                .show();
+    }
+
+    private String serverKey(Server x){
+        return x.ip+"|"+x.port+"|"+x.protocol;
+    }
+
+    private void toggleFavorite(Server x){
+        java.util.Set<String> current=
+                getSharedPreferences("vpn_lists",MODE_PRIVATE)
+                        .getStringSet("favorites",new java.util.HashSet<>());
+
+        java.util.HashSet<String> next=new java.util.HashSet<>(current);
+        String k=serverKey(x);
+
+        if(next.contains(k)) next.remove(k);
+        else next.add(k);
+
+        getSharedPreferences("vpn_lists",MODE_PRIVATE)
+                .edit().putStringSet("favorites",next).apply();
+    }
+
+    private void showFavorites(){
+        java.util.Set<String> fav=
+                getSharedPreferences("vpn_lists",MODE_PRIVATE)
+                        .getStringSet("favorites",new java.util.HashSet<>());
+
+        ArrayList<Server> list=new ArrayList<>();
+        for(Server x:servers) if(fav.contains(serverKey(x))) list.add(x);
+
+        showServerSubset("Favorite Locations",list);
+    }
+
+    private void saveRecent(Server x){
+        String key=serverKey(x);
+        String old=getSharedPreferences("vpn_lists",MODE_PRIVATE)
+                .getString("recent","");
+
+        ArrayList<String> keys=new ArrayList<>();
+        keys.add(key);
+
+        if(!old.isEmpty()){
+            for(String k:old.split("\n")){
+                if(!k.isEmpty()&&!k.equals(key)&&keys.size()<8) keys.add(k);
+            }
+        }
+
+        StringBuilder out=new StringBuilder();
+        for(String k:keys){
+            if(out.length()>0) out.append("\n");
+            out.append(k);
+        }
+
+        getSharedPreferences("vpn_lists",MODE_PRIVATE)
+                .edit().putString("recent",out.toString()).apply();
+    }
+
+    private void showRecent(){
+        String recent=getSharedPreferences("vpn_lists",MODE_PRIVATE)
+                .getString("recent","");
+
+        ArrayList<Server> list=new ArrayList<>();
+
+        if(!recent.isEmpty()){
+            for(String k:recent.split("\n")){
+                for(Server x:servers){
+                    if(k.equals(serverKey(x))){
+                        list.add(x);
+                        break;
+                    }
+                }
+            }
+        }
+
+        showServerSubset("Recent Servers",list);
+    }
+
+    private void showServerSubset(String title,List<Server> data){
+        if(data.isEmpty()){
+            new AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setMessage("No servers saved here yet.")
+                    .setPositiveButton("OK",null)
+                    .show();
+            return;
+        }
+
+        ListView list=new ListView(this);
+        list.setDividerHeight(0);
+        ServerAdapter adapter=new ServerAdapter(this,data);
+        list.setAdapter(adapter);
+
+        AlertDialog d=new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(list)
+                .setNegativeButton("Close",null)
+                .create();
+
+        list.setOnItemClickListener((p,v,pos,id)->{
+            selected=data.get(pos);
+            showSelected();
+            d.dismiss();
+        });
+
         d.show();
     }
 
@@ -513,6 +696,7 @@ public class MainActivity extends Activity {
             }
 
             pending=cfg;
+            saveRecent(selected);
             status.setText("Preparing secure tunnel...");
 
             Intent p=vpn.prepareVPNService();
