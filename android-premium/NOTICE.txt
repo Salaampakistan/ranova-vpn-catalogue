@@ -11,3 +11,5 @@ Apache License 2.0:
 https://github.com/schwabe/ics-openvpn
 
 Final standalone engine integration is a separate phase.
+
+Premium Access v0.4 adds owner credential migration, logo menu control center, and remote secondary-user administration.
