@@ -1,0 +1,53 @@
+name: Build standalone RANOVA native engine
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "android-standalone-native/**"
+      - ".github/workflows/build-standalone-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Set Android NDK
+        shell: bash
+        run: |
+          NDK="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -f "$NDK/build/cmake/android.toolchain.cmake"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+
+      - name: Build arm64 standalone engine
+        run: |
+          cargo ndk             -t arm64-v8a             -p 24             -o android-standalone-native/out             build             --manifest-path android-standalone-native/Cargo.toml             --release
+
+      - name: Verify native output
+        shell: bash
+        run: |
+          find android-standalone-native/out -type f -maxdepth 3 -print
+          test -f android-standalone-native/out/arm64-v8a/libranova_vpn_native.so
+          sha256sum android-standalone-native/out/arm64-v8a/libranova_vpn_native.so             | tee android-standalone-native/NATIVE-SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RANOVA-Standalone-Native-arm64
+          path: |
+            android-standalone-native/out/arm64-v8a/libranova_vpn_native.so
+            android-standalone-native/NATIVE-SHA256.txt
+          retention-days: 14
