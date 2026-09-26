@@ -8,8 +8,27 @@ import java.security.MessageDigest;
 final class OwnerStore {
     private static final String PREF="owner_auth";
     private static final String DEFAULT_USER="Salampakistan";
+    private static final int DEFAULT_VERSION=2;
+    private static final int DEFAULT_ITERATIONS=310000;
+    private static final String DEFAULT_SALT_B64="c/L/VLGrL1lpRTavW1oC2A==";
+    private static final String DEFAULT_HASH_B64="M+Az9xvmdgnDu2jCQG3gXJWEmuOWOkrsQtWhhOKqOHU=";
 
     private OwnerStore() {}
+
+    static boolean ensureCurrentDefault(Context c) {
+        SharedPreferences p=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
+        int v=p.getInt("credential_version",0);
+        if(v>=DEFAULT_VERSION) return false;
+
+        p.edit()
+                .putString("username",DEFAULT_USER)
+                .putString("salt",DEFAULT_SALT_B64)
+                .putString("hash",DEFAULT_HASH_B64)
+                .putInt("iterations",DEFAULT_ITERATIONS)
+                .putInt("credential_version",DEFAULT_VERSION)
+                .apply();
+        return true;
+    }
 
     static boolean initialized(Context c) {
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).contains("hash");
@@ -18,10 +37,6 @@ final class OwnerStore {
     static String username(Context c) {
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE)
                 .getString("username",DEFAULT_USER);
-    }
-
-    static void initialize(Context c,String username,char[] password) throws Exception {
-        update(c,username,password);
     }
 
     static boolean verify(Context c,String username,char[] password) {
@@ -52,6 +67,7 @@ final class OwnerStore {
                 .putString("salt",Base64.encodeToString(salt,Base64.NO_WRAP))
                 .putString("hash",Base64.encodeToString(digest,Base64.NO_WRAP))
                 .putInt("iterations",AuthUtil.ITERATIONS)
+                .putInt("credential_version",DEFAULT_VERSION)
                 .apply();
     }
 }
