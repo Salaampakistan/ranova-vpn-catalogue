@@ -1,15 +1,19 @@
-RANOVA VPN PRO Premium Beta
+RANOVA VPN PRO v1.0 Release Candidate
 
-This beta keeps the proven RANOVA automatic server catalogue and uses the
-separately installed OpenVPN for Android application through its documented
-external AIDL API.
+RANOVA VPN PRO is a standalone Android VPN client with its own Android VpnService
+and an embedded OpenVPN3-compatible tunnel engine. The end user does not need a
+separate OpenVPN application installed.
 
-It does not embed the upstream OpenVPN for Android application code.
+The automatic server catalogue is maintained in this repository and uses public
+VPN Gate relay data. The application includes Smart Connect, bounded auto-failover,
+dead-server cooldown, country/location selection, account access control, a fixed
+dashboard header, password visibility controls, RANOVA branding, and connection
+status notifications.
 
-The external API / remoteExample interface is provided upstream under
-Apache License 2.0:
-https://github.com/schwabe/ics-openvpn
+Production Android application id:
+com.ranova.vpnpro
 
-Final standalone engine integration is a separate phase.
+Internal Java namespace remains com.ranova.vpnpro.beta for source-compatibility
+with the validated standalone implementation; this is not the installed package id.
 
-Premium Access v0.4 adds owner credential migration, logo menu control center, and remote secondary-user administration.
+Third-party components remain subject to their respective licenses.
