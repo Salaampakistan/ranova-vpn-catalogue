@@ -5,11 +5,11 @@ android {
     namespace "com.ranova.vpnpro.beta"
     compileSdk 35
     defaultConfig {
-        applicationId "com.ranova.vpnpro.beta"
+        applicationId "com.ranova.vpnpro"
         minSdk 28
         targetSdk 35
-        versionCode 8
-        versionName "0.8-sticky-header-password-eye"
+        versionCode 100
+        versionName "1.0.0-rc1"
     }
     buildFeatures {
         aidl true
