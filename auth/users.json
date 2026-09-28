@@ -1,5 +1,15 @@
 {
   "schema": 2,
-  "updated_at": "2026-09-26T15:50:00+04:00",
-  "users": []
+  "updated_at": "2026-09-28T07:59:55Z",
+  "users": [
+    {
+      "username": "Rana",
+      "display_name": "Rana",
+      "role": "user",
+      "enabled": true,
+      "iterations": 310000,
+      "salt_b64": "fMK7jD70q9QUO2H1CrRCEw==",
+      "password_hash_b64": "apSdIW8aS2Bl03X91PfgqTYNNvzC7Ac4GNG4rwWKNvQ="
+    }
+  ]
 }
