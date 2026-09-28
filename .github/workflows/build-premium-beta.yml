@@ -74,6 +74,14 @@ jobs:
 
           sha256sum "$DEBUG_APK" "$RELEASE_APK" | tee android-premium/APK-SHA256.txt
 
+      - name: Stage Android signing utility
+        shell: bash
+        run: |
+          mkdir -p android-premium/signing-tools/lib
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" android-premium/signing-tools/apksigner
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" android-premium/signing-tools/lib/apksigner.jar
+          chmod +x android-premium/signing-tools/apksigner
+
       - name: Upload v1.0 RC build
         uses: actions/upload-artifact@v4
         with:
@@ -84,5 +92,7 @@ jobs:
             android-premium/APK-SHA256.txt
             android-premium/APK-BADGING.txt
             android-premium/APK-CONTENTS.txt
+            android-premium/signing-tools/apksigner
+            android-premium/signing-tools/lib/apksigner.jar
           if-no-files-found: error
           retention-days: 14
