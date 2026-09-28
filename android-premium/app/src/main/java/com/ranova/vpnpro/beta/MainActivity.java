@@ -327,7 +327,7 @@ public class MainActivity extends Activity {
                 c=(HttpURLConnection)new URL(CATALOGUE).openConnection();
                 c.setConnectTimeout(12000);
                 c.setReadTimeout(20000);
-                c.setRequestProperty("User-Agent","RANOVA-VPN-PRO/1.0.0-rc1");
+                c.setRequestProperty("User-Agent","RANOVA-VPN-PRO/1.0.0-rc2");
 
                 if(c.getResponseCode()!=200)
                     throw new IllegalStateException("HTTP "+c.getResponseCode());
@@ -750,7 +750,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("RANOVA VPN PRO")
                 .setMessage(
-                        "Version 1.0.0 RC1\n\n"+
+                        "Version 1.0.0 RC2\n\n"+
                         "Owner: Muhammad Ali Adeel\n"+
                         "Automatic VPN catalogue, smart connect and premium connection dashboard.")
                 .setPositiveButton("OK",null)
