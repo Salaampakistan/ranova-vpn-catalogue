@@ -1,15 +1,15 @@
 {
   "schema": 2,
-  "updated_at": "2026-09-28T07:59:55Z",
+  "updated_at": "2026-09-28T08:39:16Z",
   "users": [
     {
-      "username": "Rana",
-      "display_name": "Rana",
+      "username": "rana",
+      "display_name": "rana",
       "role": "user",
       "enabled": true,
       "iterations": 310000,
-      "salt_b64": "fMK7jD70q9QUO2H1CrRCEw==",
-      "password_hash_b64": "apSdIW8aS2Bl03X91PfgqTYNNvzC7Ac4GNG4rwWKNvQ="
+      "salt_b64": "OfYnXUxLEna6YqPWOFrfzA==",
+      "password_hash_b64": "\/KLubb1Z8bE7LqdObCDD+wV\/5D3A\/JDAOrf2GcP3Ie8="
     }
   ]
 }
