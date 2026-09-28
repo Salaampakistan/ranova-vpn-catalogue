@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     private boolean connected=false;
     private boolean connectionAttempt=false;
     private boolean autoRetryScheduled=false;
+    private boolean manualDisconnect=false;
     private int failoverCount=0;
     private final java.util.HashSet<String> failedThisSession=new java.util.HashSet<>();
     private String pending;
@@ -350,7 +351,13 @@ public class MainActivity extends Activity {
                     servers.clear();
                     servers.addAll(next);
                     if(!servers.isEmpty()){
-                        selected=servers.get(0);
+                        String lastGood=getSharedPreferences("vpn_health",MODE_PRIVATE)
+                                .getString("last_good","");
+                        Server preferred=findServerByKey(lastGood);
+                        selected=(preferred!=null&&!isCooling(preferred))
+                                ?preferred
+                                :findBestServer(null);
+                        if(selected==null) selected=servers.get(0);
                         showSelected();
                     }
                 });
@@ -719,6 +726,8 @@ public class MainActivity extends Activity {
                         "Smart Connect: ON\n"+
                         "Country flags: ON\n"+
                         "Live IN / OUT: ON\n"+
+                        "Auto failover: ON (up to "+MAX_AUTO_FAILOVER+" backups)\n"+
+                        "Dead-server cooldown: 5 minutes\n"+
                         "Session timeout: 12 hours")
                 .setPositiveButton("OK",null)
                 .show();
@@ -728,7 +737,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("RANOVA VPN PRO")
                 .setMessage(
-                        "Premium Beta 0.4\n\n"+
+                        "Premium Beta 0.7 Stability\n\n"+
                         "Owner: Muhammad Ali Adeel\n"+
                         "Automatic VPN catalogue, smart connect and premium connection dashboard.")
                 .setPositiveButton("OK",null)
