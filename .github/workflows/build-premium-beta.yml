@@ -1,4 +1,4 @@
-name: Build RANOVA VPN PRO premium beta
+name: Build RANOVA VPN PRO v1.0 RC
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -41,22 +41,48 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
 
-      - name: Build premium beta APK
-        run: gradle -p android-premium :app:assembleDebug --stacktrace
-
-      - name: Verify APK
+      - name: Source regression guards
         shell: bash
         run: |
-          APK="android-premium/app/build/outputs/apk/debug/app-debug.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          sha256sum "$APK" | tee android-premium/APK-SHA256.txt
+          set -euo pipefail
+          test -f android-premium/app/src/main/java/com/ranova/vpnpro/beta/RanovaVpnService.java
+          test -f android-premium/app/src/main/java/com/ranova/vpnpro/beta/PasswordToggle.java
+          grep -q 'applicationId "com.ranova.vpnpro"' android-premium/app/build.gradle
+          grep -q 'versionName "1.0.0-rc1"' android-premium/app/build.gradle
+          grep -q 'android:icon="@drawable/ic_ranova_launcher"' android-premium/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".RanovaVpnService"' android-premium/app/src/main/AndroidManifest.xml
+          ! grep -R 'de\.blinkt\.openvpn' android-premium/app/src/main android-premium/app/build.gradle
 
-      - name: Upload premium APK
+      - name: Build debug and unsigned release APKs
+        run: gradle -p android-premium :app:assembleDebug :app:assembleRelease --stacktrace
+
+      - name: Verify package and embedded engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBUG_APK="android-premium/app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_APK="android-premium/app/build/outputs/apk/release/app-release-unsigned.apk"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$DEBUG_APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$RELEASE_APK" | tee android-premium/APK-BADGING.txt
+          grep -q "package: name='com.ranova.vpnpro'" android-premium/APK-BADGING.txt
+          grep -q "versionName='1.0.0-rc1'" android-premium/APK-BADGING.txt
+
+          unzip -l "$RELEASE_APK" | tee android-premium/APK-CONTENTS.txt
+          grep -q 'lib/arm64-v8a/libovpn3.so' android-premium/APK-CONTENTS.txt
+          grep -q 'lib/armeabi-v7a/libovpn3.so' android-premium/APK-CONTENTS.txt
+
+          sha256sum "$DEBUG_APK" "$RELEASE_APK" | tee android-premium/APK-SHA256.txt
+
+      - name: Upload v1.0 RC build
         uses: actions/upload-artifact@v4
         with:
-          name: RANOVA-VPN-PRO-Premium-Beta
+          name: RANOVA-VPN-PRO-v1.0-RC1
           path: |
             android-premium/app/build/outputs/apk/debug/app-debug.apk
+            android-premium/app/build/outputs/apk/release/app-release-unsigned.apk
             android-premium/APK-SHA256.txt
+            android-premium/APK-BADGING.txt
+            android-premium/APK-CONTENTS.txt
           if-no-files-found: error
           retention-days: 14
