@@ -1,4 +1,4 @@
-RANOVA VPN PRO v1.0 Release Candidate
+RANOVA VPN PRO v1.0 RC2 Release Candidate
 
 RANOVA VPN PRO is a standalone Android VPN client with its own Android VpnService
 and an embedded OpenVPN3-compatible tunnel engine. The end user does not need a
