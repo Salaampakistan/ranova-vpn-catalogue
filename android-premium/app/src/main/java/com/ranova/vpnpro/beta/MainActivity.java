@@ -748,6 +748,133 @@ public class MainActivity extends Activity {
         return x.ip+"|"+x.port+"|"+x.protocol;
     }
 
+    private String failKey(Server x){
+        return "fail:"+serverKey(x);
+    }
+
+    private void markServerFailed(Server x){
+        if(x==null)return;
+        failedThisSession.add(serverKey(x));
+        getSharedPreferences("vpn_health",MODE_PRIVATE)
+                .edit().putLong(failKey(x),System.currentTimeMillis()).apply();
+    }
+
+    private void markServerWorking(Server x){
+        if(x==null)return;
+        failedThisSession.remove(serverKey(x));
+        getSharedPreferences("vpn_health",MODE_PRIVATE)
+                .edit()
+                .putString("last_good",serverKey(x))
+                .remove(failKey(x))
+                .apply();
+    }
+
+    private boolean isCooling(Server x){
+        if(x==null)return true;
+        long failedAt=getSharedPreferences("vpn_health",MODE_PRIVATE)
+                .getLong(failKey(x),0L);
+        return failedAt>0 && System.currentTimeMillis()-failedAt<SERVER_COOLDOWN_MS;
+    }
+
+    private Server findServerByKey(String key){
+        if(key==null||key.isEmpty())return null;
+        for(Server x:servers){
+            if(key.equals(serverKey(x)))return x;
+        }
+        return null;
+    }
+
+    private double serverScore(Server x){
+        double score=0;
+
+        if(x.ping>0) score+=Math.max(0,1200-x.ping)*4.0;
+        else score-=1200;
+
+        double mbps=x.speed/1000000.0;
+        score+=Math.min(mbps,600.0)*3.0;
+        score-=Math.min(x.sessions,500)*8.0;
+
+        if("tcp".equalsIgnoreCase(x.protocol)&&x.port==443) score+=220;
+        else if("tcp".equalsIgnoreCase(x.protocol)) score+=100;
+
+        String lastGood=getSharedPreferences("vpn_health",MODE_PRIVATE)
+                .getString("last_good","");
+        if(serverKey(x).equals(lastGood)) score+=900;
+
+        return score;
+    }
+
+    private Server findBestServer(String preferredCountryCode){
+        Server best=null;
+        double bestScore=-Double.MAX_VALUE;
+
+        for(Server x:servers){
+            if(failedThisSession.contains(serverKey(x)))continue;
+            if(isCooling(x))continue;
+
+            if(preferredCountryCode!=null
+                    &&!preferredCountryCode.equalsIgnoreCase(x.cc))continue;
+
+            double score=serverScore(x);
+            if(best==null||score>bestScore){
+                best=x;
+                bestScore=score;
+            }
+        }
+        return best;
+    }
+
+    private Server findNextFailover(Server failed){
+        Server sameCountry=failed==null?null:findBestServer(failed.cc);
+        if(sameCountry!=null)return sameCountry;
+        return findBestServer(null);
+    }
+
+    private void handleConnectionFailure(String reason){
+        if(!connectionAttempt||connected)return;
+
+        h.removeCallbacks(connectTimeout);
+        connectionAttempt=false;
+
+        Server failed=selected;
+        markServerFailed(failed);
+
+        Server next=null;
+        if(failoverCount<MAX_AUTO_FAILOVER){
+            next=findNextFailover(failed);
+        }
+
+        if(next!=null){
+            failoverCount++;
+            autoRetryScheduled=true;
+            selected=next;
+            showSelected();
+
+            status.setText("Switching server "+failoverCount+"/"+MAX_AUTO_FAILOVER+"…");
+            status.setTextColor(Ui.CYAN);
+            connectText.setText("CANCEL");
+
+            if(vpnController!=null)vpnController.stop();
+
+            h.postDelayed(()->{
+                if(!autoRetryScheduled)return;
+                autoRetryScheduled=false;
+                connectCurrent();
+            },900);
+            return;
+        }
+
+        autoRetryScheduled=false;
+        if(vpnController!=null)vpnController.stop();
+
+        connectText.setText("CONNECT");
+        connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
+        status.setText((reason==null||reason.trim().isEmpty())
+                ?"No available backup server."
+                :reason+". No available backup server.");
+        status.setTextColor(Ui.MUTED);
+    }
+
     private void toggleFavorite(Server x){
         java.util.Set<String> current=
                 getSharedPreferences("vpn_lists",MODE_PRIVATE)
