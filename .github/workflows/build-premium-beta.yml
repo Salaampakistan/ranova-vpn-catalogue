@@ -74,6 +74,11 @@ jobs:
 
           sha256sum "$DEBUG_APK" "$RELEASE_APK" | tee android-premium/APK-SHA256.txt
 
+      - name: Create source snapshot
+        shell: bash
+        run: |
+          git archive --format=zip --output=android-premium/RANOVA-VPN-PRO-Source-v1.0-RC2.zip HEAD
+
       - name: Stage Android signing utility
         shell: bash
         run: |
@@ -92,6 +97,7 @@ jobs:
             android-premium/APK-SHA256.txt
             android-premium/APK-BADGING.txt
             android-premium/APK-CONTENTS.txt
+            android-premium/RANOVA-VPN-PRO-Source-v1.0-RC2.zip
             android-premium/signing-tools/apksigner
             android-premium/signing-tools/lib/apksigner.jar
           if-no-files-found: error
