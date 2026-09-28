@@ -1099,15 +1099,20 @@ public class MainActivity extends Activity {
 
         if("CONNECTED".equals(s)){
             h.removeCallbacks(connectTimeout);
+            autoRetryScheduled=false;
             connectionAttempt=false;
+            manualDisconnect=false;
             connected=true;
+            failoverCount=0;
+
+            markServerWorking(selected);
 
             baseRx=TrafficStats.getTotalRxBytes();
             baseTx=TrafficStats.getTotalTxBytes();
 
             connectText.setText("DISCONNECT");
             connectCircle.setBackground(Ui.gradient(this,Ui.GREEN,0xff1bad86,100));
-            status.setText("CONNECTED");
+            status.setText("CONNECTED • "+selected.country);
             status.setTextColor(Ui.GREEN);
             checkIp();
             return;
@@ -1121,7 +1126,7 @@ public class MainActivity extends Activity {
                 ||"RECONNECTING".equals(s)){
             if(connectionAttempt){
                 connectText.setText("CANCEL");
-                status.setText("Connecting...");
+                status.setText("Connecting to "+(selected==null?"server":selected.country)+"…");
                 status.setTextColor(Ui.CYAN);
             }
             return;
@@ -1131,14 +1136,35 @@ public class MainActivity extends Activity {
                 ||"IDLE".equals(s)
                 ||"READYFORCONNECT".equals(s)
                 ||"NOPROCESS".equals(s)){
-            boolean wasAttempt=connectionAttempt;
-            connectionAttempt=false;
+
+            boolean wasConnected=connected;
             connected=false;
+
+            if(autoRetryScheduled){
+                connectText.setText("CANCEL");
+                status.setText("Switching server…");
+                status.setTextColor(Ui.CYAN);
+                return;
+            }
+
+            if(connectionAttempt&&!manualDisconnect){
+                handleConnectionFailure("Server disconnected");
+                return;
+            }
+
+            if(wasConnected&&!manualDisconnect){
+                connectionAttempt=true;
+                handleConnectionFailure("Connection dropped");
+                return;
+            }
+
+            connectionAttempt=false;
+            manualDisconnect=false;
             h.removeCallbacks(connectTimeout);
 
             connectText.setText("CONNECT");
             connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
-            status.setText(wasAttempt?"Connection failed. Choose another server.":"Disconnected");
+            status.setText("Disconnected");
             status.setTextColor(Ui.MUTED);
             return;
         }
