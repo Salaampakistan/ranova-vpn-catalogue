@@ -46,21 +46,22 @@ public class MainActivity extends Activity {
     private TextView flag,country,detail,status,ip,inText,outText,ping,speed,load,proto,connectText;
     private LinearLayout connectCircle;
 
+    private static final int MAX_AUTO_FAILOVER=3;
+    private static final long SERVER_COOLDOWN_MS=5L*60L*1000L;
+
     private EmbeddedVpnController vpnController;
     private boolean connected=false;
     private boolean connectionAttempt=false;
+    private boolean autoRetryScheduled=false;
+    private int failoverCount=0;
+    private final java.util.HashSet<String> failedThisSession=new java.util.HashSet<>();
     private String pending;
     private long baseRx=-1,baseTx=-1;
     private final Handler h=new Handler(Looper.getMainLooper());
 
     private final Runnable connectTimeout=()->{
         if(connectionAttempt&&!connected){
-            connectionAttempt=false;
-            if(vpnController!=null) vpnController.stop();
-            connectText.setText("CONNECT");
-            connectCircle.setBackground(Ui.gradient(this,Ui.CYAN,Ui.BLUE,100));
-            status.setText("Server did not connect. Choose another location.");
-            status.setTextColor(Ui.MUTED);
+            handleConnectionFailure("Connection timed out");
         }
     };
 
@@ -93,7 +94,13 @@ public class MainActivity extends Activity {
             }
 
             @Override public void onError(String message){
-                runOnUiThread(()->status.setText(message));
+                runOnUiThread(()->{
+                    if(connectionAttempt&&!connected){
+                        handleConnectionFailure(message==null?"Server connection failed":message);
+                    }else if(message!=null&&!message.trim().isEmpty()){
+                        status.setText(message);
+                    }
+                });
             }
         });
         vpnController.bind();
