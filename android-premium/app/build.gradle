@@ -8,8 +8,8 @@ android {
         applicationId "com.ranova.vpnpro.beta"
         minSdk 28
         targetSdk 35
-        versionCode 6
-        versionName "0.4-premium-menu"
+        versionCode 7
+        versionName "0.7-stability"
     }
     buildFeatures {
         aidl true
