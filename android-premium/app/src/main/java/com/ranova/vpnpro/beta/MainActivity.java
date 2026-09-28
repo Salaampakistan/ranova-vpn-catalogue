@@ -978,21 +978,37 @@ public class MainActivity extends Activity {
     private void smartConnect(){
         if(servers.isEmpty())return;
 
-        Server best=null;
-        for(Server s:servers){
-            if(s.ping>0&&(best==null||s.ping<best.ping))
-                best=s;
-        }
+        failedThisSession.clear();
+        failoverCount=0;
+        autoRetryScheduled=false;
+        manualDisconnect=false;
 
+        Server best=findBestServer(null);
         selected=best==null?servers.get(0):best;
         showSelected();
-        connect();
+        connectCurrent();
     }
 
     private void connect(){
+        failedThisSession.clear();
+        failoverCount=0;
+        autoRetryScheduled=false;
+        manualDisconnect=false;
+        connectCurrent();
+    }
+
+    private void connectCurrent(){
         if(selected==null){
             status.setText("Select a location");
             return;
+        }
+
+        if(isCooling(selected)){
+            Server replacement=findNextFailover(selected);
+            if(replacement!=null){
+                selected=replacement;
+                showSelected();
+            }
         }
 
         try{
@@ -1014,7 +1030,8 @@ public class MainActivity extends Activity {
             else startActivityForResult(permission,REQ_VPN);
 
         }catch(Exception e){
-            status.setText("Connect setup failed");
+            connectionAttempt=true;
+            handleConnectionFailure("Profile setup failed");
         }
     }
 
@@ -1059,7 +1076,12 @@ public class MainActivity extends Activity {
 
     private void disconnect(){
         h.removeCallbacks(connectTimeout);
+        autoRetryScheduled=false;
         connectionAttempt=false;
+        manualDisconnect=true;
+        failoverCount=0;
+        failedThisSession.clear();
+
         if(vpnController!=null) vpnController.stop();
 
         connected=false;
