@@ -48,7 +48,7 @@ jobs:
           test -f android-premium/app/src/main/java/com/ranova/vpnpro/beta/RanovaVpnService.java
           test -f android-premium/app/src/main/java/com/ranova/vpnpro/beta/PasswordToggle.java
           grep -q 'applicationId "com.ranova.vpnpro"' android-premium/app/build.gradle
-          grep -q 'versionName "1.0.0-rc1"' android-premium/app/build.gradle
+          grep -q 'versionName "1.0.0-rc2"' android-premium/app/build.gradle
           grep -q 'android:icon="@drawable/ic_ranova_launcher"' android-premium/app/src/main/AndroidManifest.xml
           grep -q 'android:name=".RanovaVpnService"' android-premium/app/src/main/AndroidManifest.xml
           ! grep -R 'de\.blinkt\.openvpn' android-premium/app/src/main android-premium/app/build.gradle
@@ -66,7 +66,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$DEBUG_APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$RELEASE_APK" | tee android-premium/APK-BADGING.txt
           grep -q "package: name='com.ranova.vpnpro'" android-premium/APK-BADGING.txt
-          grep -q "versionName='1.0.0-rc1'" android-premium/APK-BADGING.txt
+          grep -q "versionName='1.0.0-rc2'" android-premium/APK-BADGING.txt
 
           unzip -l "$RELEASE_APK" | tee android-premium/APK-CONTENTS.txt
           grep -q 'lib/arm64-v8a/libovpn3.so' android-premium/APK-CONTENTS.txt
@@ -85,7 +85,7 @@ jobs:
       - name: Upload v1.0 RC build
         uses: actions/upload-artifact@v4
         with:
-          name: RANOVA-VPN-PRO-v1.0-RC1
+          name: RANOVA-VPN-PRO-v1.0-RC2
           path: |
             android-premium/app/build/outputs/apk/debug/app-debug.apk
             android-premium/app/build/outputs/apk/release/app-release-unsigned.apk
