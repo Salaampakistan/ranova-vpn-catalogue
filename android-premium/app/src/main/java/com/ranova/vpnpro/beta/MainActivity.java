@@ -121,16 +121,30 @@ public class MainActivity extends Activity {
         SharedPreferences sp=getSharedPreferences("session",MODE_PRIVATE);
         String display=sp.getString("display_name","RANOVA User");
 
-        ScrollView scroll=new ScrollView(this);
-        LinearLayout root=new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(Ui.dp(this,18),Ui.dp(this,18),Ui.dp(this,18),Ui.dp(this,30));
-        root.setBackground(Ui.gradient(this,Ui.BG,0xff0b1730,0));
-        scroll.addView(root);
+        LinearLayout screen=new LinearLayout(this);
+        screen.setOrientation(LinearLayout.VERTICAL);
+        screen.setBackground(Ui.gradient(this,Ui.BG,0xff0b1730,0));
 
         LinearLayout top=new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(top);
+        top.setPadding(Ui.dp(this,18),Ui.dp(this,14),Ui.dp(this,18),Ui.dp(this,12));
+        top.setBackground(Ui.gradient(this,0xff071126,0xff0d1a36,0));
+        top.setElevation(Ui.dp(this,8));
+        screen.addView(top,new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(true);
+
+        LinearLayout root=new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(Ui.dp(this,18),Ui.dp(this,6),Ui.dp(this,18),Ui.dp(this,30));
+        scroll.addView(root);
+
+        LinearLayout.LayoutParams scrollLp=new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,0,1f);
+        screen.addView(scroll,scrollLp);
 
         LogoView lv=new LogoView(this);
         top.addView(lv,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,58)));
@@ -273,7 +287,7 @@ public class MainActivity extends Activity {
         note.setPadding(0,Ui.dp(this,16),0,0);
         root.addView(note);
 
-        setContentView(scroll);
+        setContentView(screen);
     }
 
     private LinearLayout stat(String label,String value){
@@ -603,8 +617,7 @@ public class MainActivity extends Activity {
         EditText u=adminField("Username");
         EditText n=adminField("Display name");
         EditText p=adminField("Password");
-        p.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        PasswordToggle.attach(p);
 
         box.addView(u);
         box.addView(n);
